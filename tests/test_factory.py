@@ -1,19 +1,17 @@
 import json
 from factory import build_agent
-from memory.base import NoOpLongTermMemory
 from memory.conversation_store import ConversationStore
+from memory.long_term import FileLongTermMemory
 
 
 def test_baseline_capabilities():
     agent = build_agent("test-session")
     names = agent.registry.available_names()
-    # 基线：两个范例工具可用；未实现的工具被隐藏
     assert "get_weather" in names
     assert "calculator" in names
-    assert "web_search" not in names
+    assert "web_search" in names
     assert "knowledge_base" not in names
-    # 长期记忆默认关闭 -> NoOp
-    assert isinstance(agent.long_term, NoOpLongTermMemory)
+    assert isinstance(agent.long_term, FileLongTermMemory)
 
 
 def test_build_agent_seeds_short_term_from_store(tmp_path):

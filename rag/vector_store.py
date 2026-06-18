@@ -27,7 +27,16 @@ class VectorStore:
         TODO: 追加到 self.texts / self.embeddings / self.metadatas。
         metadatas 为 None 时用空 dict 占位，长度需与 texts 对齐。
         """
-        raise NotImplementedError("TODO: 实现向量入库")
+        if len(texts) != len(embeddings):
+            raise ValueError("texts 与 embeddings 长度必须一致")
+        if metadatas is None:
+            metadatas = [{} for _ in texts]
+        if len(metadatas) != len(texts):
+            raise ValueError("metadatas 与 texts 长度必须一致")
+
+        self.texts.extend(texts)
+        self.embeddings.extend(embeddings)
+        self.metadatas.extend(metadatas)
 
     def search(self, query_embedding: list[float], top_k: int = 3) -> list[dict]:
         """检索最相似的 top_k 个块。
@@ -40,7 +49,27 @@ class VectorStore:
         3. 取相似度最高的 top_k，组装成上面的结构返回。
         提示: 余弦相似度 = a·b / (|a||b|)；可用 np.dot 与 np.linalg.norm。
         """
-        raise NotImplementedError("TODO: 实现余弦相似度检索")
+        if len(self) == 0 or top_k <= 0:
+            return []
+
+        q = np.array(query_embedding, dtype=float)
+        matrix = np.array(self.embeddings, dtype=float)
+        if matrix.ndim != 2 or q.ndim != 1 or matrix.shape[1] != q.shape[0]:
+            raise ValueError("query_embedding 与库中向量维度不一致")
+
+        dots = matrix @ q
+        norms = np.linalg.norm(matrix, axis=1) * np.linalg.norm(q)
+        scores = dots / (norms + 1e-8)
+        order = np.argsort(scores)[::-1][:top_k]
+
+        return [
+            {
+                "text": self.texts[int(i)],
+                "score": float(scores[int(i)]),
+                "metadata": self.metadatas[int(i)],
+            }
+            for i in order
+        ]
 
 
 # 共享实例：ingest 入库与 knowledge_base 检索都用它

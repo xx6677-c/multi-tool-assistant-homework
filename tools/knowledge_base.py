@@ -25,7 +25,7 @@ class KnowledgeBaseTool(Tool):
 
     def is_available(self) -> bool:
         # TODO: 实现 run() 后改为 return len(STORE) > 0
-        return False
+        return len(STORE) > 0
 
     def run(self, query: str) -> str:
         """检索知识库并返回拼接好的上下文，同时把来源写入 self.last_sources。
@@ -37,4 +37,31 @@ class KnowledgeBaseTool(Tool):
                                  "score": h["score"], "snippet": h["text"][:50]} for h in hits]
         4. 返回把各 hit 文本拼接成的字符串（无结果时返回提示语）。
         """
-        raise NotImplementedError("TODO: 实现 RAG 检索")
+        query = (query or "").strip()
+        if not query:
+            self.last_sources = []
+            return "知识库检索失败：缺少检索问题。"
+
+        try:
+            q_emb = self._llm.embed([query])[0]
+            hits = STORE.search(q_emb, top_k=3)
+        except Exception as exc:  # noqa: BLE001
+            self.last_sources = []
+            return f"知识库检索失败：{exc}"
+
+        if not hits:
+            self.last_sources = []
+            return "知识库里没有找到相关资料。"
+
+        self.last_sources = [
+            {
+                "doc": h["metadata"].get("doc"),
+                "score": h["score"],
+                "snippet": h["text"][:80],
+            }
+            for h in hits
+        ]
+        return "\n\n".join(
+            f"[资料 {idx} | 来源：{h['metadata'].get('doc', '未知')}]\n{h['text']}"
+            for idx, h in enumerate(hits, start=1)
+        )

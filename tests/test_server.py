@@ -18,8 +18,10 @@ def test_capabilities_baseline():
     assert resp.status_code == 200
     data = resp.json()
     assert "get_weather" in data["tools"]
-    assert data["rag_enabled"] is False
-    assert data["long_term_enabled"] is False
+    assert "web_search" in data["tools"]
+    assert "knowledge_base" in data["tools"]
+    assert data["rag_enabled"] is True
+    assert data["long_term_enabled"] is True
 
 
 def test_upload_rejects_bad_extension():

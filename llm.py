@@ -6,7 +6,10 @@
   return 组装好的工具调用列表。Agent 用 `yield from` 消费它，
 - embed(): 文本嵌入（RAG 用）。
 """
+import json
 from typing import Generator
+from urllib import error, request
+
 from openai import OpenAI
 import config
 
@@ -53,5 +56,36 @@ class LLMClient:
         return [acc[i] for i in sorted(acc)]
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        if self.embedding_model.startswith("doubao-embedding-vision"):
+            return self._embed_volcengine_multimodal(texts)
         resp = self.client.embeddings.create(model=self.embedding_model, input=texts)
         return [d.embedding for d in resp.data]
+
+    def _embed_volcengine_multimodal(self, texts: list[str]) -> list[list[float]]:
+        endpoint = config.BASE_URL.rstrip("/") + "/embeddings/multimodal"
+        embeddings = []
+        for text in texts:
+            payload = {
+                "model": self.embedding_model,
+                "input": [{"type": "text", "text": text}],
+            }
+            req = request.Request(
+                endpoint,
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {config.API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            try:
+                with request.urlopen(req, timeout=30) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+            except (OSError, error.URLError, json.JSONDecodeError, TimeoutError) as exc:
+                raise RuntimeError(f"火山多模态 embedding 调用失败: {exc}") from exc
+
+            embedding = data.get("data", {}).get("embedding")
+            if not isinstance(embedding, list):
+                raise RuntimeError(f"embedding 返回结构异常: {data}")
+            embeddings.append(embedding)
+        return embeddings
